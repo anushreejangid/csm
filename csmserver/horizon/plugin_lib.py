@@ -276,3 +276,85 @@ def clear_cfg_inconsistency(manager, device):
     output = device.send(adm_cmd)
     if '...OK' not in output:
         manager.error("{} command execution failed".format(cmd))
+
+def install_add_remove_ncs6k(manager, device, cmd, has_tar=False):
+    manager.log("Waiting the operation to continue asynchronously")
+    output = device.send(cmd, timeout=7200)
+    result = re.search('Install operation (\d+) \'', output)
+    if result:
+        op_id = result.group(1)
+        # this needs to be clarified
+        if hasattr(manager.csm, 'operation_id'):
+            if has_tar is True:
+                manager.csm.operation_id = op_id
+                manager.log("The operation {} stored".format(op_id))
+    else:
+        manager.log_install_errors(output)
+        manager.error("Operation failed")
+        return  # for sake of clarity
+
+    op_success = "The install operation will continue asynchronously"
+    failed_oper = r'Install operation {} failed'.format(op_id)
+    if op_success in output:
+        watch_operation_ncs6k(manager, device, op_id)
+        output = device.send("show install log {} detail".format(op_id))
+        if re.search(failed_oper, output):
+            manager.log_install_errors(output)
+            manager.error("Operation {} failed".format(op_id))
+            return  # for same of clarity
+
+        get_package(device, manager)
+        manager.log("Operation {} finished successfully".format(op_id))
+        return  # for sake of clarity
+    else:
+        manager.log_install_errors(output)
+        manager.error("Operation {} failed".format(op_id))
+
+def watch_operation_ncs6k(manager, device, op_id=0):
+        """
+        Function to keep watch on progress of operation
+        and report KB downloaded.
+        TODO: This needs to be changed as xr operation tracking is different
+        """
+        pat_no_install = r"No install operation in progress"
+        failed_oper = r"Install operation (\d+) failed"
+        op_progress = r"The install operation is (\d+)% complete"
+        op_download = r"(.*)KB downloaded: Download in progress"
+
+        cmd_show_install_request = "show install request"
+
+        manager.log("Watching the operation {} to complete".format(op_id))
+        last_status = None
+
+        propeller = itertools.cycle(["|", "/", "-", "\\", "|", "/", "-", "\\"])
+
+        success = "Install operation {} completed successfully".format(op_id)
+
+        finish = False
+        while not finish:
+            try:
+                # this is to catch the successful operation as soon as possible
+                device.send("", wait_for_string=success, timeout=20)
+                finish = True
+            except condoor.CommandTimeoutError:
+                pass
+
+            message = ""
+            output = device.send(cmd_show_install_request)
+            if op_id in output:
+                # FIXME reconsider the logic here
+                result = re.search(op_progress, output)
+                if result:
+                    status = result.group(0)
+                    message = "{} {}".format(propeller.next(), status)
+
+                if message != last_status:
+                    manager.csm.post_status(message)
+                    last_status = message
+
+            if pat_no_install in output:
+                break
+
+        return output
+
+

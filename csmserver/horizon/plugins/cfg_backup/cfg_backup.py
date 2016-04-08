@@ -39,9 +39,18 @@ class ConfigBackupPlugin(Plugin):
     def start(manager, device, *args, **kwargs):
         cmd = "show running-config"
         output = device.send(cmd, timeout=2200)
-        file_name = manager.file_name_from_cmd(cmd)
+	file_name = manager.file_name_from_cmd(cmd)
         full_name = manager.save_to_file(file_name, output)
         if full_name:
             manager.save_data(cmd, full_name)
             manager.log("Device config saved to {}".format(file_name))
-        return True
+        if device.os_type == "eXR":
+	   cmd = "admin show running-config"
+ 	   output = device.send(cmd, timeout=2200)
+           file_name = manager.file_name_from_cmd(cmd)
+           full_name = manager.save_to_file(file_name, output)
+           if full_name:
+              manager.save_data(cmd, full_name)
+              manager.log("Admin Device config saved to {}".format(file_name))
+
+	return True

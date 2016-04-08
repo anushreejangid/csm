@@ -183,13 +183,11 @@ def plugin_run(url, phase, cmd, log_dir, package, repository_url, plugin_name):
 
     ctx.software_packages = list(package)
     ctx.server_repository_url = repository_url
-
     if cmd:
         ctx.custom_commands = list(cmd)
 
     pm = PluginManager()
     pm.run(ctx, plugin_name)
-
     click.echo("\n Plugin execution finished.\n")
     click.echo("Log files dir: {}".format(log_dir))
     click.echo(" {} - device session log".format(session_filename))
